@@ -63,7 +63,7 @@
 /* ==================================================================== */
 /* ENGINE API BRIDGE CORING BYPASS PREFLIGHT FLIGHT                     */
 /* ==================================================================== */
-var API_URL = "https://script.google.com/macros/s/AKfycbw8K8hbmQH5EOKPMiu1xk1VYizNP91hs9GUhmXBKaDkhYu_y8FIl6ClQtwEEQA6GR5DXA/exec";
+var API_URL = "https://script.google.com/macros/s/AKfycbw8K8hbmQH5EOKPMiu1xk1VYizNP91hs9GUhmXBKaDkhYu_y8FIl6ClQtwEEQA6GR5DXA/exec"; // <--- Masukkan URL Web App di sini! Ingat tanda kutipnya!
 
 async function requestAPI(action, payload = {}) {
   try {
@@ -153,7 +153,7 @@ function routeLayarByRole() {
 }
 
 /* ==================================================================== */
-/* LAYAR KASIR UTAMA                                                    */
+/* LAYAR KASIR UTAMA DENGAN TOMBOL KELOLA MENU                          */
 /* ==================================================================== */
 async function loadLayarKasir() {
   Swal.fire({ title: 'Sinkronisasi...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
@@ -176,6 +176,70 @@ function autoFillNama() {
   if(found) document.getElementById('v_nama').value = found.nama;
 }
 
+// ---------------------------------------------------------
+// FUNGSI TAMBAH, EDIT, HAPUS MENU YANG SEMPAT HILANG
+// ---------------------------------------------------------
+function modalTambahMenu() {
+  Swal.fire({
+    title: 'Tambah Menu',
+    html: '<div class="text-start"><label class="form-label text-primary fw-bold mt-2">Nama Menu</label><input id="swal-nama" class="form-control" placeholder="Cth: Nasi Goreng Spesial"><label class="form-label text-primary fw-bold mt-3">Kategori</label><select id="swal-kat" class="form-control"><option value="MAKANAN">MAKANAN</option><option value="MINUMAN">MINUMAN</option></select><label class="form-label text-primary fw-bold mt-3">Harga Jual (Rp)</label><input id="swal-harga" type="number" class="form-control" placeholder="Cth: 15000"></div>',
+    showCancelButton: true, confirmButtonText: '<i class="fas fa-save me-1"></i> Simpan', confirmButtonColor: '#10B981',
+    preConfirm: () => { return { nama: document.getElementById('swal-nama').value, kategori: document.getElementById('swal-kat').value, harga: document.getElementById('swal-harga').value } }
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      var data = result.value;
+      if(!data.nama || !data.harga) { alert('Nama dan Harga wajib diisi!'); return; }
+      Swal.fire({title: 'Menyimpan...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+      var res = await requestAPI("tambahMenu", {nama: data.nama, kategori: data.kategori, harga: data.harga});
+      if(res.status === 'success') { Swal.fire('Berhasil', res.msg, 'success'); loadLayarKasir(); } else Swal.fire('Error', res.msg, 'error');
+    }
+  });
+}
+
+function modalKelolaMenu() {
+  var html = '<div style="max-height:60vh; overflow-y:auto; text-align:left;">';
+  html += '<table class="table table-bordered table-striped" style="font-size:0.85rem;">';
+  html += '<thead class="table-dark"><tr><th>Nama</th><th>Harga</th><th class="text-center">Aksi</th></tr></thead><tbody>';
+  catalogGlobal.forEach(m => {
+    html += '<tr><td><b>'+m.nama+'</b><br><small class="text-muted">'+m.kategori+'</small></td><td>'+toRp(m.harga)+'</td><td class="text-center"><button class="btn btn-sm btn-primary mb-1 me-1" onclick="editMenuClient(\''+m.sku+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger mb-1" onclick="hapusMenuClient(\''+m.sku+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+  });
+  html += '</tbody></table></div>';
+  Swal.fire({ title: 'Kelola Database', html: html, showConfirmButton: true, confirmButtonText: 'Tutup', width: '600px' });
+}
+
+function editMenuClient(sku) {
+  var menu = catalogGlobal.find(m => m.sku === sku);
+  if(!menu) return;
+  var selMak = menu.kategori === 'MAKANAN' ? 'selected' : '';
+  var selMin = menu.kategori === 'MINUMAN' ? 'selected' : '';
+  Swal.fire({
+    title: 'Edit Menu',
+    html: '<div class="text-start"><label class="form-label text-primary fw-bold mt-2">Nama</label><input id="edit-nama" class="form-control" value="'+menu.nama+'"><label class="form-label text-primary fw-bold mt-3">Kategori</label><select id="edit-kat" class="form-control"><option value="MAKANAN" '+selMak+'>MAKANAN</option><option value="MINUMAN" '+selMin+'>MINUMAN</option></select><label class="form-label text-primary fw-bold mt-3">Harga (Rp)</label><input id="edit-harga" type="number" class="form-control" value="'+menu.harga+'"></div>',
+    showCancelButton: true, confirmButtonText: '<i class="fas fa-save me-1"></i> Update', confirmButtonColor: '#10B981',
+    preConfirm: () => { return { sku: sku, nama: document.getElementById('edit-nama').value, kategori: document.getElementById('edit-kat').value, harga: document.getElementById('edit-harga').value } }
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      var data = result.value;
+      if(!data.nama || !data.harga) { alert('Wajib diisi!'); return; }
+      Swal.fire({title: 'Mengupdate...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+      var res = await requestAPI("editMenu", data);
+      if(res.status === 'success') { Swal.fire('Berhasil', res.msg, 'success'); loadLayarKasir(); } else Swal.fire('Error', res.msg, 'error');
+    }
+  });
+}
+
+function hapusMenuClient(sku) {
+  Swal.fire({ title: 'Hapus Menu?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Ya, Hapus!'
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      Swal.fire({title: 'Menghapus...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+      var res = await requestAPI("hapusMenu", {sku: sku});
+      if(res.status === 'success') { Swal.fire('Berhasil', res.msg, 'success'); loadLayarKasir(); } else Swal.fire('Error', res.msg, 'error');
+    }
+  });
+}
+// ---------------------------------------------------------
+
 function searchMenuKasir() {
   var q = document.getElementById('v_search_menu').value.toLowerCase();
   document.querySelectorAll('.btn-tab').forEach(b => b.classList.remove('active')); 
@@ -189,7 +253,7 @@ function searchMenuKasir() {
 }
 
 function renderKasir() {
-  var html = '<div class="row g-3"><div class="col-lg-7 col-md-12"><div class="d-flex flex-wrap gap-2 mb-3 align-items-center" id="kasir-tabs"><button class="btn-tab active flex-grow-1" onclick="filterMenuKasir(\'SEMUA\', this)">SEMUA</button><button class="btn-tab flex-grow-1" onclick="filterMenuKasir(\'MAKANAN\', this)">MAKANAN</button><button class="btn-tab flex-grow-1" onclick="filterMenuKasir(\'MINUMAN\', this)">MINUMAN</button><input type="text" id="v_search_menu" class="form-control border-primary flex-grow-1" style="min-width:140px;" placeholder="🔍 Cari menu..." onkeyup="searchMenuKasir()"></div><div id="kasir-menu-grid" class="pos-grid" style="max-height: 60vh; overflow-y: auto; padding-right: 5px;"></div></div><div class="col-lg-5 col-md-12"><div class="cart-area d-flex flex-column"><h5 class="fw-bold text-center border-bottom pb-2">KERANJANG MEJA</h5><div class="row g-2 mb-2"><div class="col-6"><input type="text" id="v_meja" class="form-control fw-bold border-primary" placeholder="No Meja"></div><div class="col-6"><input type="text" id="v_nama" class="form-control fw-bold" placeholder="Nama Pelanggan"></div><div class="col-12"><input type="number" id="v_wa" class="form-control border-success" placeholder="No WA Pelanggan (Cari/Input)" list="list-wa" onchange="autoFillNama()" onkeyup="autoFillNama()"><datalist id="list-wa"></datalist></div></div><div id="cart-list" style="max-height: 30vh; overflow-y:auto; margin-bottom:10px;"></div><select id="v_diskon" class="form-control fw-bold mb-2 py-2 text-center text-danger" style="border: 2px solid red;" onchange="hitungTotalKasir()"><option value="0">TIDAK ADA DISKON (0%)</option><option value="5">POTONGAN DISKON 5%</option><option value="10">POTONGAN DISKON 10%</option><option value="15">POTONGAN DISKON 15%</option><option value="20">POTONGAN DISKON 20%</option><option value="25">POTONGAN DISKON 25%</option></select><select id="v_metode" class="form-control fw-bold mb-2 py-2 text-center text-primary" style="font-size:1rem; border: 2px solid blue;"><option value="CASH">CASH (TUNAI)</option><option value="QRIS">QRIS SINKRON</option><option value="TRANSFER">TRANSFER BANK</option><option value="GOFOOD">DELIVERY GOFOOD</option><option value="GRABFOOD">DELIVERY GRABFOOD</option><option value="SHOPEEFOOD">DELIVERY SHOPEE FOOD</option><option value="MAXIMFOOD">DELIVERY MAXIM FOOD</option></select><div class="bg-dark text-white rounded p-2 mb-2"><div class="d-flex justify-content-between" style="font-size:0.8rem;"><span>Subtotal Murni:</span><span id="ui_subtotal">Rp 0</span></div><div class="d-flex justify-content-between text-warning" style="font-size:0.8rem;"><span>Diskon Toko:</span><span id="ui_diskon">-Rp 0</span></div><div class="d-flex justify-content-between text-info border-bottom pb-1 mb-1" style="font-size:0.8rem;"><span>Pajak PB1 & Service (10%):</span><span id="ui_pajak">+Rp 0</span></div><div class="text-center mt-1" style="font-size:0.8rem; letter-spacing:1px;">TOTAL AKHIR BILL</div><div id="v_total" class="fw-bold text-warning fs-3 text-center">Rp 0</div></div><button class="btn btn-success w-100 py-3 fw-bold fs-5 shadow" onclick="checkoutOrder()"><i class="fas fa-check-circle me-2"></i>BAYAR & CETAK NOTA</button></div></div></div>';
+  var html = '<div class="row g-3"><div class="col-lg-7 col-md-12"><div class="d-flex flex-wrap gap-2 mb-3 align-items-center" id="kasir-tabs"><button class="btn-tab active flex-grow-1" onclick="filterMenuKasir(\'SEMUA\', this)">SEMUA</button><button class="btn-tab flex-grow-1" onclick="filterMenuKasir(\'MAKANAN\', this)">MAKANAN</button><button class="btn-tab flex-grow-1" onclick="filterMenuKasir(\'MINUMAN\', this)">MINUMAN</button><input type="text" id="v_search_menu" class="form-control border-primary flex-grow-1" style="min-width:140px;" placeholder="🔍 Cari menu..." onkeyup="searchMenuKasir()"><button class="btn btn-primary fw-bold" onclick="modalTambahMenu()"><i class="fas fa-plus"></i></button><button class="btn btn-secondary fw-bold" onclick="modalKelolaMenu()"><i class="fas fa-cog"></i></button></div><div id="kasir-menu-grid" class="pos-grid" style="max-height: 60vh; overflow-y: auto; padding-right: 5px;"></div></div><div class="col-lg-5 col-md-12"><div class="cart-area d-flex flex-column"><h5 class="fw-bold text-center border-bottom pb-2">KERANJANG MEJA</h5><div class="row g-2 mb-2"><div class="col-6"><input type="text" id="v_meja" class="form-control fw-bold border-primary" placeholder="No Meja"></div><div class="col-6"><input type="text" id="v_nama" class="form-control fw-bold" placeholder="Nama Pelanggan"></div><div class="col-12"><input type="number" id="v_wa" class="form-control border-success" placeholder="No WA Pelanggan (Cari/Input)" list="list-wa" onchange="autoFillNama()" onkeyup="autoFillNama()"><datalist id="list-wa"></datalist></div></div><div id="cart-list" style="max-height: 30vh; overflow-y:auto; margin-bottom:10px;"></div><select id="v_diskon" class="form-control fw-bold mb-2 py-2 text-center text-danger" style="border: 2px solid red;" onchange="hitungTotalKasir()"><option value="0">TIDAK ADA DISKON (0%)</option><option value="5">POTONGAN DISKON 5%</option><option value="10">POTONGAN DISKON 10%</option><option value="15">POTONGAN DISKON 15%</option><option value="20">POTONGAN DISKON 20%</option><option value="25">POTONGAN DISKON 25%</option></select><select id="v_metode" class="form-control fw-bold mb-2 py-2 text-center text-primary" style="font-size:1rem; border: 2px solid blue;"><option value="CASH">CASH (TUNAI)</option><option value="QRIS">QRIS SINKRON</option><option value="TRANSFER">TRANSFER BANK</option><option value="GOFOOD">DELIVERY GOFOOD</option><option value="GRABFOOD">DELIVERY GRABFOOD</option><option value="SHOPEEFOOD">DELIVERY SHOPEE FOOD</option><option value="MAXIMFOOD">DELIVERY MAXIM FOOD</option></select><div class="bg-dark text-white rounded p-2 mb-2"><div class="d-flex justify-content-between" style="font-size:0.8rem;"><span>Subtotal Murni:</span><span id="ui_subtotal">Rp 0</span></div><div class="d-flex justify-content-between text-warning" style="font-size:0.8rem;"><span>Diskon Toko:</span><span id="ui_diskon">-Rp 0</span></div><div class="d-flex justify-content-between text-info border-bottom pb-1 mb-1" style="font-size:0.8rem;"><span>Pajak PB1 & Service (10%):</span><span id="ui_pajak">+Rp 0</span></div><div class="text-center mt-1" style="font-size:0.8rem; letter-spacing:1px;">TOTAL AKHIR BILL</div><div id="v_total" class="fw-bold text-warning fs-3 text-center">Rp 0</div></div><button class="btn btn-success w-100 py-3 fw-bold fs-5 shadow" onclick="checkoutOrder()"><i class="fas fa-check-circle me-2"></i>BAYAR & CETAK NOTA</button></div></div></div>';
   document.getElementById('app-content').innerHTML = html;
   filterMenuKasir('SEMUA', document.querySelector('.btn-tab.active'));
 }
